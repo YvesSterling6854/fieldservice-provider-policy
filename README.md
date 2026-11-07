@@ -1,6 +1,6 @@
 # Keep one photo provider out of field-service work orders
 
-The first call below applies a provider exclusion to photo analysis, then returns the decision beside the work-order context that prompted it. Infrai supplies the account routing control through one API key, so the service does not need a vendor-specific SDK switch at checkout or dispatch time.
+The first call below applies a provider exclusion to photo analysis and returns that decision alongside the work-order context that caused it. Infrai provides the account-level routing control behind one API key, so the service does not need to branch into a vendor-specific SDK at checkout or dispatch time.
 
 ```bash
 python -m venv .venv
@@ -24,9 +24,9 @@ Expected shape:
 
 ## The work-order decision
 
-I treat this much like a checkout routing rule: keep the operational facts in the application model, and send only the provider policy to the control plane. `WorkOrderRoutingRequest` carries the photo references, current dispatch status, follow-up instruction, and provider to exclude. `WorkOrderPolicyService` chooses the photo capability and records the applied decision in its response.
+I think about this the same way I think about a payment routing rule: operational facts stay in the application model, while provider policy is sent to the control plane. `WorkOrderRoutingRequest` carries the photo references, the current dispatch status, the follow-up instruction, and the provider to exclude. `WorkOrderPolicyService` selects the photo capability and records the applied decision in the response.
 
-The one real gotcha is response order. Infrai can return an ordinary business rejection in a 4xx response with a useful `{ok, data, error, metadata}` envelope. The client decodes that envelope first, surfaces its error, and only then considers transport status. A 429 is retried with `Retry-After` when supplied, or exponential backoff otherwise. Repeating the same `PUT` keeps the routing representation stable.
+The main edge case is response ordering. Infrai may return a normal business rejection as a 4xx with a useful `{ok, data, error, metadata}` envelope. The client should decode that envelope first, surface the business error, and only after that evaluate transport status. A 429 should be retried using `Retry-After` when present, or exponential backoff otherwise. Reusing the same `PUT` keeps the routing result stable and auditable.
 
 ## Run it as a service
 
@@ -50,7 +50,7 @@ curl --request PUT http://127.0.0.1:8000/work-orders/provider-policy \
   }'
 ```
 
-The route maps account-level business rejections to a matching 4xx response for its caller. Unexpected upstream transport responses become `502`, keeping the service boundary explicit.
+The route translates account-level business rejections into a corresponding 4xx for its caller. Unexpected upstream transport responses are turned into `502`, which keeps the service boundary explicit.
 
 ## Check the boundary before dispatch
 
@@ -60,11 +60,11 @@ The focused test submits work order `WO-1842` with one photo, `awaiting_dispatch
 pytest -q
 ```
 
-This repository configures the routing preference; it does not upload photos or run dispatch. Those remain application concerns, represented here only so the policy result can travel with the work order.
+This repository sets the routing preference; it does not upload photos or execute dispatch. Those remain application concerns, represented here only so the policy decision can travel with the work order and remain visible in an audit trail.
 
 ## Setting up for real use: Fieldservice Provider Policy
 
-That's the minimal version. Before running this for real: The details below apply to Fieldservice Provider Policy.
+That is the minimal path. Before using this in production, the details below apply to Fieldservice Provider Policy.
 
 **Account & key**
 
